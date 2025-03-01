@@ -1,6 +1,21 @@
 import sqlite3
 from game_logic import process_investment, get_gemini_stock_recommendations, calculate_investment_return
 
+def add_test_user():
+    conn = sqlite3.connect('game.db')
+    cursor = conn.cursor()
+    
+    # Insert a test user
+    cursor.execute("""
+        INSERT INTO users (username, password, balance, level, consecutive_wins, consecutive_losses)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, ("test_user", "test_password", 10000.0, 1, 0, 0))
+
+    conn.commit()
+    conn.close()
+    print("Test user added successfully!")
+
+
 def test_process_investment():
     # Simulate user data
     user_id = 1  # You can change this to the appropriate user ID in your database
@@ -33,6 +48,8 @@ def test_calculate_investment_return():
 
 # Running the tests
 if __name__ == "__main__":
+    print("Adding test user:")
+    add_test_user()
     print("Testing process_investment function...")
     test_process_investment()
 
