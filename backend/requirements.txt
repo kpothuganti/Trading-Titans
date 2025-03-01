@@ -1,0 +1,8 @@
+flask
+requests
+google-generativeai
+python-dotenv
+streamlit
+sqlite3
+yfinance
+midnight-sdk
