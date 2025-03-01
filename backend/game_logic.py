@@ -1,111 +1,128 @@
-import requests
-import google.generativeai as genai
-import sqlite3
+import os
 import random
-import yfinance as yf
+import sqlite3
+import google import genai
+from stocks import get_real_time_stock_price, get_historical_percentage_change
 from dotenv import load_dotenv
-#from blockchain import store_transaction
 
 load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-genai.configure(api_key="AIzaSyAszRUnBNw2Q2GD9T0X737QE9agf-WDWJQ")
 consecutive_wins = {}
 consecutive_losses = {}
 
-def generate_financial_advice():
-    """Using Gemini AI to fetch top 10 recommended stocks."""
-    response = genai.GenerativeModel('gemini-pro').generate_content("List 10 trending stocks for investment.")
-    return response.text.split("\n")[:10]
+def get_gemini_stock_recommendations():
+    """Fetching stock recommendations along with financial data from Gemini AI."""
+    response = genai.GenerativeModel('gemini-pro').generate_content("Provide 10 trending stocks with investment advice and priority percentages.")
+    stock_list = response.text.split("\n")[:10]
+    return [{"symbol": stock.split("-")[0].strip(), "advice": stock.split("-")[1].strip(), "priority": random.uniform(50, 100)} for stock in stock_list]
 
-def get_real_time_stock_price(symbol):
-    """Fetching real-time stock price from yFinance API."""
-    stock = yf.Ticker(symbol)
-    data = stock.history(period="1d")
-    return data['Close'].iloc[-1]
+def calculate_investment_return(investment_amount, symbol, days=1):
+    """Calculating return on investment based on historical data with market simulation."""
+    historical_change = get_historical_percentage_change(symbol, days)
+    
+    if historical_change is None:
+        return None, None
+
+    return_amount = (investment_amount * historical_change) / 100
+
+    # Multiply by a random factor (1 to 10) to simulate the result
+    random_factor = random.randint(1, 10)
+    total_return = return_amount * random_factor
+
+    profit_or_loss = "profit" if total_return > 0 else "loss"
+
+    return total_return, profit_or_loss
 
 def process_investment(user_id, stock_symbol, amount):
     """The logic of stock investment and applies game rules (level up, punishment, rewards)."""
     
-    global consecutive_wins, consecutive_losses
-    
     conn = sqlite3.connect("game.db")
     cursor = conn.cursor()
 
-    cursor.execute("SELECT balance, level FROM users WHERE id = ?", (user_id,))
+    cursor.execute("SELECT balance, level, consecutive_wins, consecutive_losses FROM users WHERE id = ?", (user_id,))
     user = cursor.fetchone()
 
     if not user:
         return {"error": "User not found"}
 
-    balance, level = user
+    balance, level, consecutive_wins, consecutive_losses = user
 
     if balance < amount:
-        return {"error": "Insufficient funds"}
+        return {"error": "Oops! Insufficient funds Trader"}
 
-    # Fetch real-time stock price
-    try:
-        stock_price = get_real_time_stock_price(stock_symbol)
-    except Exception as e:
-        return {"error": f"Failed to fetch stock data: {str(e)}"}
+    # Get the real-time price for the stock
+    current_price = get_real_time_stock_price(stock_symbol)
+    if current_price is None:
+        return {"error": "Failed to fetch real-time stock price."}
 
-    # Simulate investment outcome (random multiplier)
-    multiplier = random.choice([2,3,4,5,6,7,8,9,10])  # Loss or profit
-    outcome = amount * multiplier
+    # Calculate the investment return based on historical data and real-time data
+    investment_return, profit_or_loss = calculate_investment_return(amount, stock_symbol, 1)
 
-    new_balance = balance + outcome - amount
+    if investment_return is None:
+        return {"error": "Stock data unavailable"}
 
-    # Store transaction in database
-    cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-    cursor.execute("INSERT INTO transactions (user_id, stock_symbol, investment, outcome) VALUES (?, ?, ?, ?)", 
-                   (user_id, stock_symbol, amount, outcome))
+    new_balance = balance + investment_return
+    roi = (investment_return / amount) * 100
 
-    # Store transaction in Midnight blockchain
-    #store_transaction(user_id, stock_symbol, amount, outcome)
+    # Record the transaction in the database
+    cursor.execute("""
+        INSERT INTO TRANSACTIONS (user_id, stock_symbol, invested_amount, current_value, return_amount, profit_or_loss, roi)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, stock_symbol, amount, current_price, investment_return, profit_or_loss, roi))
 
+    # Handle consecutive wins/losses
+    if profit_or_loss == "profit":
+        consecutive_wins += 1
+        consecutive_losses = 0
+    else:
+        consecutive_losses += 1
+        consecutive_wins = 0
+
+    # Reward or Punishment
     message = ""
-    
-    # Check Level Up Condition
+    if consecutive_wins >= 3:
+        new_balance += 100  # Reward of $100 for 3 consecutive wins
+        message += " 🎁 Bonus! You got a $100 reward for 3 consecutive wins!"
+        consecutive_wins = 0
+
+    if consecutive_losses >= 3 and level > 1:
+        level -= 1  # Demote if 3 consecutive losses
+        message += " ⛔ You lost 3 times in a row. You have been demoted to the previous level!"
+        consecutive_losses = 0
+
+    # Level up if balance doubles
     if new_balance >= balance * 2 and level == 1:
         level = 2
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
         message = "🎉 Congratulations! You've leveled up to Level 2!"
+
+    # Level up to Level 3 if balance triples
     elif new_balance >= balance * 3 and level == 2:
         level = 3
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
         message = "🚀 You are now at Level 3! Keep going!"
 
-    # Game Over Condition
+    # Game Over if balance goes negative
     if new_balance < 0:
-        message = "💀 Game Over! You went bankrupt!"
-        cursor.execute("UPDATE users SET balance = 10000, level = 1 WHERE id = ?", (user_id,))  # Reset Game
+        message = "💀 Game Over! You are bankrupt."
+        cursor.execute("UPDATE users SET balance = 10000, level = 1 WHERE id = ?", (user_id,))
         new_balance = 10000
         level = 1
-        consecutive_wins[user_id] = 0
-        consecutive_losses[user_id] = 0
-    else:
-        # Track win/loss streak
-        if outcome > 0:
-            consecutive_wins[user_id] = consecutive_wins.get(user_id, 0) + 1
-            consecutive_losses[user_id] = 0
-        else:
-            consecutive_losses[user_id] = consecutive_losses.get(user_id, 0) + 1
-            consecutive_wins[user_id] = 0
+        consecutive_wins = 0
+        consecutive_losses = 0
 
-        # Apply Reward for Consecutive Wins
-        if consecutive_wins[user_id] >= 2:
-            new_balance += 100
-            cursor.execute("UPDATE users SET balance = ? WHERE id = ?", (new_balance, user_id))
-            message += " 🎁 Bonus! You got a $100 reward for 2 consecutive wins!"
-            consecutive_wins[user_id] = 0  # Reset streak
-
-        # Apply Punishment for Consecutive Losses
-        if consecutive_losses[user_id] >= 3 and level > 1:
-            level -= 1
-            cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
-            message += " ⛔ You lost 3 times in a row. You have been demoted to the previous level!"
-            consecutive_losses[user_id] = 0  # Reset streak
+    cursor.execute("""
+        UPDATE users SET balance = ?, level = ?, consecutive_wins = ?, consecutive_losses = ? WHERE id = ?
+    """, (new_balance, level, consecutive_wins, consecutive_losses, user_id))
 
     conn.commit()
     conn.close()
 
-    return {"new_balance": new_balance, "level": level, "message": message}
+    return {
+        "new_balance": new_balance,
+        "level": level,
+        "profit_or_loss": profit_or_loss,
+        "roi": roi,
+        "message": message
+    }

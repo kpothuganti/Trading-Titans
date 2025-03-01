@@ -1,8 +1,9 @@
 flask
 requests
-google-generativeai
+google-genai
+google-api-python-client
 python-dotenv
 streamlit
 sqlite3
-yfinance
-midnight-sdk
+alpha_vantage
+pandas
