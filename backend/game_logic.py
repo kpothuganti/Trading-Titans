@@ -1,25 +1,57 @@
 import os
 import random
+import json
 import sqlite3
-import google import genai
+import google.generativeai as genai
 from stocks import get_real_time_stock_price, get_historical_percentage_change
 from dotenv import load_dotenv
 
+
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-consecutive_wins = {}
-consecutive_losses = {}
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 def get_gemini_stock_recommendations():
-    """Fetching stock recommendations along with financial data from Gemini AI."""
-    response = genai.GenerativeModel('gemini-pro').generate_content("Provide 10 trending stocks with investment advice and priority percentages.")
+    """Fetch 10 trending stocks with structured financial advice from Gemini AI."""
+    prompt = """
+    You are providing virtual stock investment recommendations in a stock simulation game.
+    Provide 10 trending stock symbols along with investment advice and a suggested percentage to invest (between 5% and 25%). 
+    Format the response strictly as follows:
+    
+    SYMBOL - Advice - Percentage_to_Invest
+    Example:
+    AAPL - Apple's stock is stable with long-term growth potential - 15%
+    TSLA - Tesla's stock is volatile, consider short-term trading - 10%
+    
+    Only provide 10 recommendations and avoid disclaimers or generic investment warnings.
+    """
+
+    response = genai.GenerativeModel('gemini-1.5-pro').generate_content(prompt)
+
     stock_list = response.text.split("\n")[:10]
-    return [{"symbol": stock.split("-")[0].strip(), "advice": stock.split("-")[1].strip(), "priority": random.uniform(50, 100)} for stock in stock_list]
+    recommendations = []
+
+    for stock in stock_list:
+        parts = stock.split(" - ")
+        if len(parts) == 3:
+            symbol, advice, percentage = parts
+            try:
+                percentage = float(percentage.replace("%", "").strip())  # Convert percentage to float
+            except ValueError:
+                percentage = random.uniform(50, 100)  # Assign a random percentage if parsing fails
+            recommendations.append({
+                "symbol": symbol.strip(),
+                "advice": advice.strip(),
+                "priority": percentage
+            })
+
+    return recommendations
+
+
 
 def calculate_investment_return(investment_amount, symbol, days=1):
     """Calculating return on investment based on historical data with market simulation."""
-    historical_change = get_historical_percentage_change(symbol, days)
+    historical_change = get_historical_percentage_change(symbol)
     
     if historical_change is None:
         return None, None
