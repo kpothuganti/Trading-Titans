@@ -123,22 +123,29 @@ def process_investment(user_id, stock_symbol, amount):
     # Reward or Punishment
     if consecutive_wins >= 3:
         new_balance += 100  # Reward of $100 for 3 consecutive wins
-        message += " 🎁 Bonus! You got a $100 reward for 3 consecutive wins!"
+        message += " 🎁 Bonus! You got a $100 reward for 3 consecutive wins! Keep going Trader 🚀"
         consecutive_wins = 0
 
-    if consecutive_losses >= 3 and level > 1:
-        level -= 1  # Demote if 3 consecutive losses
-        message += " ⛔ You lost 3 times in a row. You have been demoted to the previous level!"
-        consecutive_losses = 0
+    if consecutive_losses >= 3 and level >= 1:
+        if level > 1:
+          level -= 1  # Demote if 3 consecutive losses
+          message += " ⛔ You lost 3 times in a row. You have been demoted to the previous level!"
+          consecutive_losses = 0
+        if level == 1:
+            new_balance -=100
+            message += " 💸 You lost 3 times in a row. You have been fined $100! Please focus on good investments"
+            consecutive_losses = 0
+          
+          
 
     # Level up if balance doubles
-    if new_balance >= balance * 2 and level == 1:
-        level = 2
+    if new_balance > balance * 2:
+        level += 1
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
-        message += " 🎉 Congratulations! You've leveled up to Level 2!"
+        message += " 🎉 Congratulations! You've leveled up to Level" + level +"!"
 
     # Level up to Level 3 if balance triples
-    elif new_balance >= balance * 3 and level == 2:
+    elif new_balance > balance * 3 and level == 2:
         level = 3
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
         message += " 🚀 You are now at Level 3! Keep going!"
