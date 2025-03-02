@@ -5,10 +5,8 @@ google-api-python-client
 google.generativeai
 python-dotenv
 streamlit
-sqlite3
 alpha_vantage
 pandas
 yfinance
 midnight-sdk
-os
 flask-cors

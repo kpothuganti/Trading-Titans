@@ -59,7 +59,7 @@ def calculate_investment_return(investment_amount, symbol, days=1):
     total_return = return_amount * random_factor
 
     # Convert to scalar value
-    total_return = float(total_return)
+    total_return = float(total_return.iloc[0]) if hasattr(total_return, 'iloc') else float(total_return)
 
     # Determine profit or loss
     profit_or_loss = "profit" if total_return > 0 else "loss"
@@ -95,7 +95,7 @@ def process_investment(user_id, stock_symbol, amount):
         return {"error": "Failed to fetch real-time stock price."}
 
     # Ensure current_price is a scalar value (float)
-    current_price = float(current_price)
+    current_price = float(current_price.iloc[0]) if hasattr(current_price, 'iloc') else float(current_price)
 
     # Calculate the investment return based on historical data and real-time data
     investment_return, profit_or_loss, message = calculate_investment_return(amount, stock_symbol, 1)
