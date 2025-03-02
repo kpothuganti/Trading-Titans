@@ -215,7 +215,9 @@ def show_login(image_path):
                     st.session_state.username = username
                     st.rerun()
                 else:
-                    st.error("Invalid username or password")
+                    st.markdown("<p style='color: white; background-color: red; padding: 10px; border-radius: 5px;'>❌ Invalid username or password</p>", unsafe_allow_html=True)
+
+                    #st.error("Invalid username or password")
         
         with col_signup:
             if st.button("Create Account", use_container_width=True):
@@ -384,7 +386,7 @@ def show_dashboard(image_path):
             )
             
             # Process investment button
-            if st.button("Trade & Go Ahead", use_container_width=True):
+            if st.button("Invest", use_container_width=True):
                 if amount <= 0:
                     st.error("Please enter a valid investment amount!")
                 elif amount > st.session_state.balance:
@@ -428,7 +430,7 @@ def show_dashboard(image_path):
     
     # Show current investments in the left column
     with col_investments:
-        st.markdown("<h2 style='color: white; font-weight: bold;'> 💰 Your Current Investments </h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: white; font-weight: bold;'> 💰 Investment History </h2>", unsafe_allow_html=True)
         #st.subheader("💰 Your Current Investments")
         transactions = get_user_transactions(st.session_state.user_id)
         if transactions:
@@ -441,11 +443,12 @@ def show_dashboard(image_path):
             # Display the dataframe with custom formatting
             st.dataframe(df, height=300)
         else:
-            st.info("No current investments. Start trading to see your portfolio here!")
+            st.markdown("<p style='color: white; font-weight: bold;'>No current investments. Start trading to see your portfolio here!</p>", unsafe_allow_html=True)
+            #st.info("No current investments. Start trading to see your portfolio here!")
     
     # Show portfolio summary in the right column
     with col_portfolio:
-        st.markdown("<h2 style='color: white; font-weight: bold;'> 📊 Your Portfolio Summary </h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='color: white; font-weight: bold;'> 📊 Your Portfolio </h2>", unsafe_allow_html=True)
         #st.subheader("📊 Your Portfolio Summary")
         portfolio = get_user_portfolio(st.session_state.user_id)
         if portfolio:
@@ -496,7 +499,8 @@ def show_dashboard(image_path):
 
             st.markdown("</div>", unsafe_allow_html=True)
         else:
-            st.info("No portfolio data yet. Make your first investment!")
+            st.markdown("<p style='color: white; font-weight: bold;'>No portfolio data yet. Make your first investment!</p>", unsafe_allow_html=True)
+
     
     # Logout button (visual only - functionality is handled by the top right button)
     if st.button("Logout", key="logout_button_bottom"):

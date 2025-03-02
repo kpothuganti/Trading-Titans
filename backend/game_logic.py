@@ -87,7 +87,7 @@ def process_investment(user_id, stock_symbol, amount):
     balance, level, consecutive_wins, consecutive_losses = user
 
     if balance < amount:
-        return {"error": "Oops! Insufficient funds Trader"}
+        return {"error": "Oops! Insufficient funds"}
 
     # Get the real-time price for the stock
     current_price = get_real_time_stock_price(stock_symbol)
