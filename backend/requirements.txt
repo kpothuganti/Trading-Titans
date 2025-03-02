@@ -11,3 +11,4 @@ pandas
 yfinance
 midnight-sdk
 os
+flask-cors
