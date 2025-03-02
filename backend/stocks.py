@@ -1,59 +1,35 @@
-import requests
+import yfinance as yf
 import os
-#from game_logic import get_gemini_stock_recommendations  # Import the Gemini function
 
-# Store API Key securely
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
-BASE_URL = "https://www.alphavantage.co/query"
-
-def get_real_time_stock_price(symbol, interval="5min"):
-    """Fetch the latest available stock price."""
-    params = {
-        "function": "TIME_SERIES_INTRADAY",
-        "symbol": symbol,
-        "interval": interval,
-        "apikey": ALPHA_VANTAGE_API_KEY
-    }
-    response = requests.get(BASE_URL, params=params)
-    data = response.json()
-
-    if f"Time Series ({interval})" in data:
-        timestamps = list(data[f"Time Series ({interval})"].keys())
-        latest_timestamp = timestamps[0]  # Most recent data point
-        latest_price = float(data[f"Time Series ({interval})"][latest_timestamp]["4. close"])
-        return latest_price
-    else:
-        print(f"Error fetching real-time price: {data.get('Note', 'Unknown error')}")
+def get_real_time_stock_price(symbol, interval="5m"):
+    """Fetch the latest available stock price using yfinance."""
+    try:
+        # Fetch stock data using yfinance for real-time price
+        data = yf.download(symbol, period="1d", interval=interval)
+        if not data.empty:
+            latest_price = data['Close'].iloc[-1]  # Get the most recent closing price
+            return latest_price
+        else:
+            print(f"Error fetching real-time price: No data available for {symbol}")
+            return None
+    except Exception as e:
+        print(f"Error fetching real-time price: {e}")
         return None
 
 def get_historical_percentage_change(symbol):
-    """Fetch the percentage change in stock price over the last 30 days."""
-    params = {
-        "function": "TIME_SERIES_DAILY",  # Free endpoint
-        "symbol": symbol,
-        "outputsize": "full",  # To ensure we get the entire data
-        "apikey": ALPHA_VANTAGE_API_KEY
-    }
-    response = requests.get(BASE_URL, params=params)
-    data = response.json()
-
-    if "Time Series (Daily)" in data:
-        dates = list(data["Time Series (Daily)"].keys())
-
-        dates.sort(reverse=True)
-
-        # Get the last 30 dates, which should be the most recent ones
-        recent_dates = dates[:30]
-
-        if len(recent_dates) >= 30:
-            latest_close = float(data["Time Series (Daily)"][recent_dates[0]]["4. close"])
-            past_close = float(data["Time Series (Daily)"][recent_dates[-1]]["4. close"])
-            percentage_change = ((latest_close - past_close) / past_close) * 100
+    """Fetch the percentage change in stock price over the last 30 days using yfinance."""
+    try:
+        # Fetch historical data using yfinance
+        data = yf.download(symbol, period="1mo", interval="1d")
+        if not data.empty:
+            latest_close = data['Close'].iloc[0]  # The first date's close price
+            past_close = data['Close'].iloc[-1]  # The last date's close price
+            print(f"Latest close: {latest_close}, Past close: {past_close}")
+            percentage_change = -1 * ((latest_close - past_close) / past_close) * 100
             return round(percentage_change, 2)
         else:
-            print("Not enough data for a 30-day change.")
+            print(f"Error fetching historical data: No data available for {symbol}")
             return None
-    else:
-        print(f"Error fetching historical data: {data.get('Note', 'Unknown error')}")
+    except Exception as e:
+        print(f"Error fetching historical data: {e}")
         return None
-

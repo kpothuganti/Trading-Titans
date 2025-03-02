@@ -37,13 +37,13 @@ def test_get_gemini_stock_recommendations():
         print(f"Stock: {recommendation['symbol']}, Advice: {recommendation['advice']}, Priority: {recommendation['priority']}")
 
 def test_calculate_investment_return():
-    stock_symbol = 'AAPL'  # Stock symbol
+    stock_symbol = 'NVDA'  # Stock symbol
     amount = 1000  # Investment amount
 
     # Calculate the return
-    investment_return, profit_or_loss = calculate_investment_return(amount, stock_symbol)
+    investment_return, profit_or_loss, message = calculate_investment_return(amount, stock_symbol)
     
-    print(f"Investment Return: ${investment_return:.2f}, Profit or Loss: {profit_or_loss}")
+    print(f"Investment Return: ${investment_return:.2f}, Profit or Loss: {profit_or_loss}, Message: {message}")
 
 
 # Running the tests

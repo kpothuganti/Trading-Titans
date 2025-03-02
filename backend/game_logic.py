@@ -1,11 +1,9 @@
 import os
 import random
-import json
 import sqlite3
 import google.generativeai as genai
 from stocks import get_real_time_stock_price, get_historical_percentage_change
 from dotenv import load_dotenv
-
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
@@ -26,7 +24,7 @@ def get_gemini_stock_recommendations():
     Only provide 10 recommendations and avoid disclaimers or generic investment warnings.
     """
 
-    response = genai.GenerativeModel('gemini-1.5-pro').generate_content(prompt)
+    response = genai.GenerativeModel('gemini-2.0-flash').generate_content(prompt)
 
     stock_list = response.text.split("\n")[:10]
     recommendations = []
@@ -47,8 +45,6 @@ def get_gemini_stock_recommendations():
 
     return recommendations
 
-
-
 def calculate_investment_return(investment_amount, symbol, days=1):
     """Calculating return on investment based on historical data with market simulation."""
     historical_change = get_historical_percentage_change(symbol)
@@ -62,9 +58,19 @@ def calculate_investment_return(investment_amount, symbol, days=1):
     random_factor = random.randint(1, 10)
     total_return = return_amount * random_factor
 
+    # Convert to scalar value
+    total_return = float(total_return)
+
+    # Determine profit or loss
     profit_or_loss = "profit" if total_return > 0 else "loss"
 
-    return total_return, profit_or_loss
+    # Display message based on the result
+    if profit_or_loss == "profit":
+        message = f"🎉 Hurray! You've made a profit of ${total_return:.2f}!"
+    else:
+        message = f"💸 Oops! You've made a loss of ${-total_return:.2f}. Better luck next time!"
+
+    return total_return, profit_or_loss, message
 
 def process_investment(user_id, stock_symbol, amount):
     """The logic of stock investment and applies game rules (level up, punishment, rewards)."""
@@ -88,18 +94,21 @@ def process_investment(user_id, stock_symbol, amount):
     if current_price is None:
         return {"error": "Failed to fetch real-time stock price."}
 
+    # Ensure current_price is a scalar value (float)
+    current_price = float(current_price)
+
     # Calculate the investment return based on historical data and real-time data
-    investment_return, profit_or_loss = calculate_investment_return(amount, stock_symbol, 1)
+    investment_return, profit_or_loss, message = calculate_investment_return(amount, stock_symbol, 1)
 
     if investment_return is None:
         return {"error": "Stock data unavailable"}
 
     new_balance = balance + investment_return
-    roi = (investment_return / amount) * 100
+    roi = investment_return
 
     # Record the transaction in the database
     cursor.execute("""
-        INSERT INTO TRANSACTIONS (user_id, stock_symbol, invested_amount, current_value, return_amount, profit_or_loss, roi)
+        INSERT INTO TRANSACTIONS (user_id, stock_symbol, invested_amount, current_value, return_amount, profit_loss, return_on_investment)
         VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (user_id, stock_symbol, amount, current_price, investment_return, profit_or_loss, roi))
 
@@ -112,7 +121,6 @@ def process_investment(user_id, stock_symbol, amount):
         consecutive_wins = 0
 
     # Reward or Punishment
-    message = ""
     if consecutive_wins >= 3:
         new_balance += 100  # Reward of $100 for 3 consecutive wins
         message += " 🎁 Bonus! You got a $100 reward for 3 consecutive wins!"
@@ -127,13 +135,13 @@ def process_investment(user_id, stock_symbol, amount):
     if new_balance >= balance * 2 and level == 1:
         level = 2
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
-        message = "🎉 Congratulations! You've leveled up to Level 2!"
+        message += " 🎉 Congratulations! You've leveled up to Level 2!"
 
     # Level up to Level 3 if balance triples
     elif new_balance >= balance * 3 and level == 2:
         level = 3
         cursor.execute("UPDATE users SET level = ? WHERE id = ?", (level, user_id))
-        message = "🚀 You are now at Level 3! Keep going!"
+        message += " 🚀 You are now at Level 3! Keep going!"
 
     # Game Over if balance goes negative
     if new_balance < 0:

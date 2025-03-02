@@ -2,6 +2,7 @@ flask
 requests
 google-genai
 google-api-python-client
+google.generativeai
 python-dotenv
 streamlit
 sqlite3

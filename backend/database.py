@@ -21,6 +21,7 @@ def init_db():
                   stock_symbol TEXT,
                   invested_amount REAL,
                   current_value REAL,
+                  return_amount REAL,
                   profit_loss REAL,
                   return_on_investment REAL,
                   advice TEXT,
@@ -32,4 +33,4 @@ def init_db():
   conn.commit()
   conn.close()
 
-  init_db()
+init_db()

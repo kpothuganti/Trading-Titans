@@ -1,193 +1,118 @@
 import streamlit as st
-import time
 import sqlite3
+import sys
+import os
+sys.path.append('backend')
+from game_logic import process_investment, get_gemini_stock_recommendations, calculate_investment_return
+print(sys.path)
+from stocks import get_real_time_stock_price, get_historical_percentage_change
 
-# Database function to get and add users
-def get_user(username, password):
-    conn = sqlite3.connect('game.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
-    user = cursor.fetchone()
-    conn.close()
-    return user
 
-def add_user(username, password):
-    conn = sqlite3.connect('game.db')
-    cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-    conn.commit()
-    conn.close()
 
-# Streamlit UI
-def main():
-    st.set_page_config(page_title="Trading Titans - Stock Adventure", layout="centered")
+# Step 1: User Login / Registration
+def user_login():
+    st.title("Welcome to the Trading Titans Game!")
+    
+    option = st.selectbox("Choose an option", ["Login", "Register"])
 
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
-    if "users" not in st.session_state:
-        st.session_state.users = {}  # This is just for the session, not database
-
-    if not st.session_state.logged_in:
-        show_login()
-    else:
-        show_game()
-
-def show_login():
-    st.markdown("""
-        <style>
-        .title {
-            font-size: 50px;
-            font-weight: bold;
-            text-align: center;
-            color: cyan;
-            text-shadow: 2px 2px 10px rgba(0, 255, 255, 0.8);
-        }
-        .login-container {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 80vh;
-            padding: 20px;
-        }
-        .login-form {
-            padding: 20px;
-            background-color: rgba(0, 0, 0, 0.6);
-            border-radius: 10px;
-            width: 100%;
-            max-width: 400px;
-        }
-        .image-container {
-            display: flex;
-            justify-content: flex-start;
-            align-items: center;
-            max-width: 100%;
-            padding: 20px;
-        }
-        .image-container img {
-            max-width: 400px;
-            width: 100%;
-            border-radius: 10px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div class='title'>Cyber Quest - Login</div>", unsafe_allow_html=True)
-
-    # Use a container with two columns for the image and login form
-    col1, col2 = st.columns([1, 2])
-
-    with col1:
-        # Display image for login page (left-aligned)
-        st.markdown("<div class='image-container'>", unsafe_allow_html=True)
-        st.image("https://cbx-prod.b-cdn.net/COLOURBOX25446334.jpg?width=800&height=800&quality=70", width=400)  # Replace with your image path
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with col2:
-        # Create login form inside a div with background color and padding
-        st.markdown("<div class='login-form'>", unsafe_allow_html=True)
+    if option == "Login":
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-
         if st.button("Login"):
-            user = get_user(username, password)
+            conn = sqlite3.connect("game.db")
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+            user = cursor.fetchone()
             if user:
-                st.session_state.logged_in = True
-                st.session_state.user_id = user[0]  # Store user session ID
-                st.session_state.balance = user[3]  # User's balance from DB
-                st.session_state.level = user[4]  # User's level from DB
-                st.rerun()
+                st.success("Logged in successfully!")
+                return user[0], user[1], user[2]  # user_id, balance, level
             else:
-                st.error("Password is incorrect. Please recheck or sign up.")
+                st.error("Invalid credentials. Please register.")
+                return None, None, None
 
-        if st.button("Create an Account"):
-            st.session_state.show_signup = True
-            st.rerun()
+    elif option == "Register":
+        username = st.text_input("Choose a username")
+        password = st.text_input("Choose a password", type="password")
+        if st.button("Register"):
+            conn = sqlite3.connect("game.db")
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+            conn.commit()
+            st.success("Registration successful! Please login.")
+            return None, None, None
 
-        st.markdown("</div>", unsafe_allow_html=True)
+# Step 2: Display Current Information (Balance, Level, etc.)
+def display_user_info(user_id):
+    conn = sqlite3.connect("game.db")
+    cursor = conn.cursor()
+    cursor.execute("SELECT balance, level FROM users WHERE id = ?", (user_id,))
+    user_info = cursor.fetchone()
+    conn.close()
 
-def show_signup():
-    st.markdown("<div class='title'>Create an Account</div>", unsafe_allow_html=True)
-    new_username = st.text_input("New Username")
-    new_password = st.text_input("New Password", type="password")
-    confirm_password = st.text_input("Confirm Password", type="password")
+    if user_info:
+        balance, level = user_info
+        st.subheader(f"Current Balance: ${balance}")
+        st.subheader(f"Current Level: {level}")
+        return balance, level
+    else:
+        st.error("User information not found.")
+        return 0, 0
 
-    if st.button("Sign Up"):
-        if new_username in st.session_state.users:
-            st.error("Username already exists. Choose a different one.")
-        elif new_password != confirm_password:
-            st.error("Passwords do not match!")
-        elif new_username and new_password:
-            # Store new user in the database
-            add_user(new_username, new_password)
-            st.success("Account created successfully! You can now log in.")
-            time.sleep(1)
-            st.session_state.show_signup = False
-            st.rerun()
-        else:
-            st.error("Please fill in all fields.")
+# Step 3: Show Stock Recommendations from Gemini AI
+def display_recommended_stocks():
+    st.subheader("Top 10 Stock Recommendations")
+    recommendations = get_gemini_stock_recommendations()
+    stock_symbols = [rec['symbol'] for rec in recommendations]
+
+    selected_stock = st.selectbox("Select a Stock", stock_symbols)
+    investment_amount = st.number_input("Enter Investment Amount ($)", min_value=1.0, max_value=10000.0, step=10.0)
     
-    if st.button("Back to Login"):
-        st.session_state.show_signup = False
-        st.rerun()
+    if st.button("Invest"):
+        # Assuming user_id is fetched from the session or logged-in status
+        user_id = 1  # This should be dynamically set based on logged-in user
+        result = process_investment(user_id, selected_stock, investment_amount)
+        st.write(result)
 
-def show_game():
-    st.markdown("""
-        <style>
-        .game-title {
-            font-size: 60px;
-            font-weight: bold;
-            text-align: center;
-            color: #00FF7F;
-            text-shadow: 3px 3px 10px rgba(0, 255, 127, 0.8);
-            margin-bottom: 20px;
-        }
-        .game-description {
-            text-align: center;
-            font-size: 20px;
-            color: #E0FFFF;
-            margin-bottom: 30px;
-        }
-        .game-button {
-            display: block;
-            margin: 20px auto;
-            padding: 15px 30px;
-            font-size: 20px;
-            background-color: #4682B4;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-        }
-        .game-image {
-            display: block;
-            margin: 20px auto;
-            max-width: 600px;
-        }
-        body {
-            background-color: #121212;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+# Step 4: Display User's Current Investments (Transactions)
+def display_current_investments(user_id):
+    conn = sqlite3.connect("game.db")
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT stock_symbol, invested_amount, return_amount, profit_loss, roi
+        FROM TRANSACTIONS
+        WHERE user_id = ?
+        ORDER BY timestamp DESC
+        LIMIT 5
+    """, (user_id,))
+    transactions = cursor.fetchall()
+    conn.close()
 
-    st.markdown("<div class='game-title'>Cyber Quest</div>", unsafe_allow_html=True)
-    st.markdown("<p class='game-description'>Prepare for an epic adventure in a cybernetic world!</p>", unsafe_allow_html=True)
+    st.subheader("Your Current Investments")
+    if transactions:
+        for txn in transactions:
+            st.write(f"Stock: {txn[0]}, Invested: ${txn[1]}, Return: ${txn[2]}, Profit/Loss: {txn[3]}, ROI: {txn[4]}%")
+    else:
+        st.write("No investments found yet.")
 
-    st.image("https://upload.wikimedia.org/wikipedia/commons/0/02/Stock-Market-Icons.jpg", caption="Cyber Quest World", use_column_width=True, output_format="JPEG", clamp=True, width = 600)  # Replace with your game image path
+# Main Function
+def main():
+    # Step 1: Login or Register
+    user_id, balance, level = user_login()
 
-    if st.button("Start Game", key="start_game", on_click=None, type="primary", use_container_width=False):
-        with st.spinner("Game is Loading..."):
-            time.sleep(2)
-        st.success("Game Started!")
+    if user_id is None:
+        # If login or registration fails, show an error and stop the process
+        st.error("User not found. Please register first.")
+    else:
+        # Step 2: Show user information
+        display_user_info(user_id)
 
-    if st.button("Logout", key="logout", on_click=None, type="secondary", use_container_width=False):
-        st.session_state.logged_in = False
-        st.rerun()
+        # Step 3: Show Stock Recommendations and Allow Investment
+        display_recommended_stocks()
+
+        # Step 4: Show User's Current Investments
+        display_current_investments(user_id)
+
 
 if __name__ == "__main__":
-    if "show_signup" not in st.session_state:
-        st.session_state.show_signup = False
+    main()
 
-    if st.session_state.show_signup:
-        show_signup()
-    else:
-        main()
